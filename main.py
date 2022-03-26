@@ -222,7 +222,7 @@ def main():
     lost_count = 0
     enemy_num = 5
     player_vel = 5
-    enemy_vel = 1
+    enemy_vel = 1.5
     laser_vel = 6
     meteor_vel = 10
 
