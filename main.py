@@ -7,7 +7,7 @@ import pygame
 pygame.font.init()
 GAME_FONT = pygame.font.SysFont('arial', 40)
 MENU_FONT = pygame.font.SysFont('arial', 80)
-GITHUB_FONT = pygame.font.SysFont('arial', 10)
+GITHUB_FONT = pygame.font.SysFont('arial', 25)
 
 WIDTH, HEIGHT = 1280, 720
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -26,8 +26,7 @@ PLAYER_LASER = pygame.image.load(os.path.join('assets', 'img', 'player_laser.png
 ENEMY_LASER = pygame.image.load(os.path.join('assets', 'img', 'enemy_laser.png'))
 
 # Props
-METEOR1 = pygame.image.load(os.path.join('assets', 'img', 'meteor1.png'))
-METEOR2 = pygame.image.load(os.path.join('assets', 'img', 'meteor2.png'))
+METEOR = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'meteor1.png')), (50, 50))
 DESTROY_ENEMY_BONUS = pygame.image.load(os.path.join('assets', 'img', 'destroy_enemy_bonus.png'))
 ENEMY_SPEED_DEBUFF = pygame.image.load(os.path.join('assets', 'img', 'enemy_speed_debuff.png'))
 FIRE_RATE_BONUS = pygame.image.load(os.path.join('assets', 'img', 'fire_rate_bonus.png'))
@@ -36,7 +35,7 @@ HP_BONUS = pygame.image.load(os.path.join('assets', 'img', 'hp_bonus.png'))
 # Background
 BG = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'background.png')), (WIDTH, HEIGHT))
 
-class Laser:
+class Projectile:
     def __init__(self, x, y, img):
         self.x = x
         self.y = y
@@ -54,6 +53,21 @@ class Laser:
 
     def collision(self, obj):
         return collide(self, obj)
+
+class Meteor(Projectile):
+    def __init__(self, x, y, img):
+        super().__init__(x, y, img)
+        self.img = img
+        self.mask = pygame.mask.from_surface(self.img)
+
+    def get_width(self):
+        return self.img.get_width()
+
+    def get_height(self):
+        return self.img.get_height()
+
+class Booster(Projectile):
+    pass
 
 class Ship:
     COOLDOWN = 30
@@ -90,7 +104,7 @@ class Ship:
 
     def shoot(self):
         if self.cooldown_counter == 0:
-            laser = Laser(self.x, self.y, self.laser_img)
+            laser = Projectile(self.x, self.y, self.laser_img)
             self.lasers.append(laser)
             self.cooldown_counter = 1
 
@@ -123,7 +137,7 @@ class Player(Ship):
 
     def shoot(self):
         if self.cooldown_counter == 0:
-            laser = Laser(self.x + 80, self.y + 55, self.laser_img)
+            laser = Projectile(self.x + 80, self.y + 55, self.laser_img)
             self.lasers.append(laser)
             self.cooldown_counter = 1
 
@@ -153,7 +167,7 @@ class Enemy(Ship):
 
     def shoot(self):
         if self.cooldown_counter == 0:
-            laser = Laser(self.x, self.y + self.get_height()/5, self.laser_img)
+            laser = Projectile(self.x, self.y + self.get_height()/5, self.laser_img)
             self.lasers.append(laser)
             self.cooldown_counter = 1
 
@@ -167,13 +181,15 @@ def main():
     FPS = 60
     level = 0
     lives = 5
-    player_vel = 5
     lost = False
     lost_count = 0
     enemies = []
+    meteors = []
     wave_length = 5
     enemy_vel = 1
+    player_vel = 5
     laser_vel = 5
+    meteor_vel = 7
 
     clock = pygame.time.Clock()
 
@@ -190,6 +206,9 @@ def main():
 
         for enemy in enemies:
             enemy.draw(WIN)
+
+        for meteor in meteors:
+            meteor.draw(WIN)
 
         player.draw(WIN)
 
@@ -217,8 +236,12 @@ def main():
             level += 1
             wave_length += 2
             for i in range(wave_length):
-                enemy = Enemy(random.randrange(WIDTH+100, WIDTH+1000+level*50), random.randrange(100, HEIGHT-100), random.randrange(1,4))
+                enemy = Enemy(random.randrange(WIDTH+100, WIDTH+1500+level*50), random.randrange(100, HEIGHT-100), random.randrange(1,4))
                 enemies.append(enemy)
+
+        if random.randrange(0, 20*FPS) == 1: # Every second there is a 5% chance of a meteor spawning
+            meteor = Meteor(random.randrange(WIDTH+100, WIDTH+1000+level*50), random.randrange(100, HEIGHT-100), METEOR)
+            meteors.append(meteor)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -251,14 +274,26 @@ def main():
                 lives -= 1
                 enemies.remove(enemy)
 
-        player.move_lasers(laser_vel, enemies) # add meteors
+        for meteor in meteors[:]:
+            meteor.move(-meteor_vel)
+
+            if collide(meteor, player):
+                player.health -= 25
+                meteors.remove(meteor)
+
+            elif meteor.x + meteor.get_width() < 0:
+                meteors.remove(meteor)
+
+        player.move_lasers(laser_vel, enemies)
 
 def main_menu():
     run = True
     while run:
         WIN.blit(BG, (0, 0))
         title_label = MENU_FONT.render('Press ANY KEY to begin', 1, (255,255,255))
+        github_label = GITHUB_FONT.render('github.com/cerinalovre', 1, (255,255,255))
         WIN.blit(title_label, (WIDTH/2 - title_label.get_width()/2, 300))
+        WIN.blit(github_label, (WIDTH - github_label.get_width() - 10, HEIGHT - 30))
         pygame.display.update()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
