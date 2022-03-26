@@ -3,8 +3,9 @@ import time
 import random
 
 import pygame
-
+pygame.mixer.init()
 pygame.font.init()
+
 GAME_FONT = pygame.font.SysFont('arial', 40)
 MENU_FONT = pygame.font.SysFont('arial', 80)
 GITHUB_FONT = pygame.font.SysFont('arial', 25)
@@ -27,13 +28,20 @@ ENEMY_LASER = pygame.image.load(os.path.join('assets', 'img', 'enemy_laser.png')
 
 # Props
 METEOR = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'meteor1.png')), (50, 50))
-DESTROY_ENEMY_BONUS = pygame.image.load(os.path.join('assets', 'img', 'destroy_enemy_bonus.png'))
-ENEMY_SPEED_DEBUFF = pygame.image.load(os.path.join('assets', 'img', 'enemy_speed_debuff.png'))
-FIRE_RATE_BONUS = pygame.image.load(os.path.join('assets', 'img', 'fire_rate_bonus.png'))
-HP_BONUS = pygame.image.load(os.path.join('assets', 'img', 'hp_bonus.png'))
+DESTROY_ENEMY_BONUS = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'destroy_enemy_bonus.png')), (50, 50))
+FIRE_RATE_BONUS = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'fire_rate_bonus.png')), (50, 50))
+HP_BONUS = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'hp_bonus.png')), (50, 50))
 
 # Background
 BG = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'background.png')), (WIDTH, HEIGHT))
+
+# Sounds
+PLAYER_LASER_SOUND = pygame.mixer.Sound(os.path.join('assets', 'sound', 'player_laser.wav'))
+ENEMY_LASER_SOUND = pygame.mixer.Sound(os.path.join('assets', 'sound', 'enemy_laser.wav'))
+BONUS_SOUND = pygame.mixer.Sound(os.path.join('assets', 'sound', 'bonus.mp3'))
+EXPLOSION_SOUND = pygame.mixer.Sound(os.path.join('assets', 'sound', 'explosion.wav'))
+SMALL_EXPLOSION_SOUND = pygame.mixer.Sound(os.path.join('assets', 'sound', 'small_explosion.wav'))
+HIT_SOUND = pygame.mixer.Sound(os.path.join('assets', 'sound', 'hit.wav'))
 
 class Projectile:
     def __init__(self, x, y, img):
@@ -66,11 +74,33 @@ class Meteor(Projectile):
     def get_height(self):
         return self.img.get_height()
 
-class Booster(Projectile):
-    pass
+class Booster():
+    BOOSTERS = {
+        1 : DESTROY_ENEMY_BONUS,
+        2 : FIRE_RATE_BONUS,
+        3 : HP_BONUS
+    }
+
+    def __init__(self, x, y, type):
+        self.x = x
+        self.y = y
+        self.img = self.BOOSTERS[type]
+        self.mask = pygame.mask.from_surface(self.img)
+
+    def draw(self, window):
+        window.blit(self.img, (self.x, self.y))
+
+    def move(self, vel):
+        self.x += vel
+
+    def get_width(self):
+        return self.img.get_width()
+
+    def get_height(self):
+        return self.img.get_height()
 
 class Ship:
-    COOLDOWN = 30
+    cooldown_time = 30
 
     def __init__(self, x, y, health=100):
         self.x = x
@@ -93,11 +123,12 @@ class Ship:
             if laser.off_screen(WIDTH):
                 self.lasers.remove(laser)
             elif laser.collision(obj):
+                HIT_SOUND.play()
                 obj.health -= 10
                 self.lasers.remove(laser)
 
     def cooldown(self):
-        if self.cooldown_counter >= self.COOLDOWN:
+        if self.cooldown_counter >= self.cooldown_time:
             self.cooldown_counter = 0
         elif self.cooldown_counter > 0:
             self.cooldown_counter += 1
@@ -131,6 +162,7 @@ class Player(Ship):
             else:
                 for obj in objs:
                     if laser.collision(obj):
+                        SMALL_EXPLOSION_SOUND.play()
                         objs.remove(obj)
                         if laser in self.lasers:
                             self.lasers.remove(laser)
@@ -140,6 +172,7 @@ class Player(Ship):
             laser = Projectile(self.x + 80, self.y + 55, self.laser_img)
             self.lasers.append(laser)
             self.cooldown_counter = 1
+            PLAYER_LASER_SOUND.play()
 
     def healthbar(self, window):
         pygame.draw.rect(window, (255,0,0), (self.x + 25, self.y + 20, 80, 7))
@@ -170,6 +203,8 @@ class Enemy(Ship):
             laser = Projectile(self.x, self.y + self.get_height()/5, self.laser_img)
             self.lasers.append(laser)
             self.cooldown_counter = 1
+            if not laser.off_screen(WIDTH):
+                ENEMY_LASER_SOUND.play()
 
 def collide(obj1, obj2):
     offset_x = obj2.x - obj1.x
@@ -182,14 +217,21 @@ def main():
     level = 0
     lives = 5
     lost = False
+    boost_active = False
+    boost_time = 0
     lost_count = 0
+    enemy_num = 5
+    player_vel = 5
+    enemy_vel = 1
+    laser_vel = 6
+    meteor_vel = 10
+
     enemies = []
     meteors = []
-    wave_length = 5
-    enemy_vel = 1
-    player_vel = 5
-    laser_vel = 5
-    meteor_vel = 7
+    destroy_enemy = []
+    enemy_speed = []
+    fire_rate = []
+    hp_bonus = []
 
     clock = pygame.time.Clock()
 
@@ -206,9 +248,14 @@ def main():
 
         for enemy in enemies:
             enemy.draw(WIN)
-
         for meteor in meteors:
             meteor.draw(WIN)
+        for boost in destroy_enemy:
+            boost.draw(WIN)
+        for boost in fire_rate:
+            boost.draw(WIN)
+        for boost in hp_bonus:
+            boost.draw(WIN)
 
         player.draw(WIN)
 
@@ -232,16 +279,33 @@ def main():
             else:
                 continue
 
+        if boost_active:
+            boost_time += 1
+            if boost_time > FPS * 8: # Fire rate boost lasts for 8 seconds
+                Ship.cooldown_time = 30
+                boost_time = 0
+                boost_active = False
+
         if len(enemies) == 0:
             level += 1
-            wave_length += 2
-            for i in range(wave_length):
+            enemy_num += 2
+            for i in range(enemy_num):
                 enemy = Enemy(random.randrange(WIDTH+100, WIDTH+1500+level*50), random.randrange(100, HEIGHT-100), random.randrange(1,4))
                 enemies.append(enemy)
 
         if random.randrange(0, 20*FPS) == 1: # Every second there is a 5% chance of a meteor spawning
             meteor = Meteor(random.randrange(WIDTH+100, WIDTH+1000+level*50), random.randrange(100, HEIGHT-100), METEOR)
             meteors.append(meteor)
+        
+        if random.randrange(0, 25*FPS) == 1: # Every second there is a 4% chance of a booster spawning
+            booster_type = random.randrange(1,4)
+            booster = Booster(random.randrange(WIDTH+100, WIDTH+1000+level*50), random.randrange(100, HEIGHT-100), booster_type)
+            if booster_type == 1:
+                destroy_enemy.append(booster)
+            if booster_type == 2:
+                fire_rate.append(booster)
+            if booster_type == 3:
+                hp_bonus.append(booster)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -265,11 +329,10 @@ def main():
 
             if random.randrange(0, 4*FPS) == 1: # Every second enemy has a 25% chance of shooting
                 enemy.shoot()
-
             if collide(enemy, player):
                 player.health -= 10
                 enemies.remove(enemy)
-
+                EXPLOSION_SOUND.play()
             elif enemy.x + enemy.get_width() < 0:
                 lives -= 1
                 enemies.remove(enemy)
@@ -280,9 +343,40 @@ def main():
             if collide(meteor, player):
                 player.health -= 25
                 meteors.remove(meteor)
-
+                EXPLOSION_SOUND.play()
             elif meteor.x + meteor.get_width() < 0:
                 meteors.remove(meteor)
+
+        for boost in destroy_enemy[:]:
+            boost.move(-enemy_vel)
+
+            if collide(boost, player):
+                destroy_enemy.remove(boost)
+                enemies.clear()
+                BONUS_SOUND.play()
+            elif boost.x + boost.get_width() < 0:
+                destroy_enemy.remove(boost)
+
+        for boost in fire_rate[:]:
+            boost.move(-enemy_vel)
+
+            if collide(boost, player):
+                fire_rate.remove(boost)
+                Ship.cooldown_time = 15
+                boost_active = True
+                BONUS_SOUND.play()
+            elif boost.x + boost.get_width() < 0:
+                fire_rate.remove(boost)
+
+        for boost in hp_bonus[:]:
+            boost.move(-enemy_vel)
+
+            if collide(boost, player):
+                hp_bonus.remove(boost)
+                player.health = 100
+                BONUS_SOUND.play()
+            elif boost.x + boost.get_width() < 0:
+                hp_bonus.remove(boost)
 
         player.move_lasers(laser_vel, enemies)
 
