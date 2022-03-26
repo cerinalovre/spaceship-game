@@ -5,12 +5,13 @@ import random
 import pygame
 
 pygame.font.init()
-MAIN_FONT = pygame.font.SysFont('arial', 40)
-LOST_FONT = pygame.font.SysFont('arial', 80)
+GAME_FONT = pygame.font.SysFont('arial', 40)
+MENU_FONT = pygame.font.SysFont('arial', 80)
+GITHUB_FONT = pygame.font.SysFont('arial', 10)
 
 WIDTH, HEIGHT = 1280, 720
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption('Space shooter game')
+pygame.display.set_caption('Spaceship game')
 
 # Enemy ships
 ENEMY_SHIP1 = pygame.transform.flip(pygame.image.load(os.path.join('assets', 'img', 'enemy_ship1.png')), True, False)
@@ -33,7 +34,7 @@ FIRE_RATE_BONUS = pygame.image.load(os.path.join('assets', 'img', 'fire_rate_bon
 HP_BONUS = pygame.image.load(os.path.join('assets', 'img', 'hp_bonus.png'))
 
 # Background
-BG = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'background.png')),(WIDTH, HEIGHT))
+BG = pygame.transform.scale(pygame.image.load(os.path.join('assets', 'img', 'background.png')), (WIDTH, HEIGHT))
 
 class Laser:
     def __init__(self, x, y, img):
@@ -117,14 +118,22 @@ class Player(Ship):
                 for obj in objs:
                     if laser.collision(obj):
                         objs.remove(obj)
-                        self.lasers.remove(laser)
+                        if laser in self.lasers:
+                            self.lasers.remove(laser)
 
     def shoot(self):
         if self.cooldown_counter == 0:
             laser = Laser(self.x + 80, self.y + 55, self.laser_img)
             self.lasers.append(laser)
             self.cooldown_counter = 1
-                    
+
+    def healthbar(self, window):
+        pygame.draw.rect(window, (255,0,0), (self.x + 25, self.y + 20, 80, 7))
+        pygame.draw.rect(window, (0,255,0), (self.x + 25, self.y + 20, 80 * (self.health/self.max_health), 7))
+
+    def draw(self, window):
+        super().draw(window)  
+        self.healthbar(window)              
 
 class Enemy(Ship):
     ENEMY_SHIPS = {
@@ -168,13 +177,13 @@ def main():
 
     clock = pygame.time.Clock()
 
-    player = Player(300, 650)
+    player = Player(100, 300)
 
     def draw_window():
         WIN.blit(BG, (0, 0))
 
-        lives_label = MAIN_FONT.render(f'Lives: {level}', 1, (255,255,255))
-        level_label = MAIN_FONT.render(f'Level: {level}', 1, (255,255,255))
+        lives_label = GAME_FONT.render(f'Lives: {lives}', 1, (255,255,255))
+        level_label = GAME_FONT.render(f'Level: {level}', 1, (255,255,255))
         
         WIN.blit(lives_label, (10, 10))
         WIN.blit(level_label, (WIDTH - level_label.get_width() - 10, 10))
@@ -185,7 +194,7 @@ def main():
         player.draw(WIN)
 
         if lost:
-            lost_label = LOST_FONT.render('You lost!', 1, (255,255,255))
+            lost_label = MENU_FONT.render('You lost!', 1, (255,255,255))
             WIN.blit(lost_label, (WIDTH/2 - lost_label.get_width()/2, 300))
 
         pygame.display.update()
@@ -199,7 +208,7 @@ def main():
             lost_count += 1
 
         if lost:
-            if lost_count > FPS * 4: # Showing lost message for 4 seconds
+            if lost_count > FPS * 4: # Showing 'You lost!' message for 4 seconds
                 run = False
             else:
                 continue
@@ -213,7 +222,7 @@ def main():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                run = False
+                quit()
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_a] and player.x - player_vel > 0: # Left
@@ -224,7 +233,7 @@ def main():
             player.y -= player_vel
         if keys[pygame.K_s] and player.y + player_vel + player.get_height() - 50 < HEIGHT: # Down
             player.y += player_vel
-        if keys[pygame.K_SPACE]: # shoot
+        if keys[pygame.K_SPACE]: # Shoot
             player.shoot()
 
         for enemy in enemies[:]:
@@ -238,11 +247,25 @@ def main():
                 player.health -= 10
                 enemies.remove(enemy)
 
-            elif enemy.x + enemy.get_width() < 0: # bug
+            elif enemy.x + enemy.get_width() < 0:
                 lives -= 1
                 enemies.remove(enemy)
 
         player.move_lasers(laser_vel, enemies) # add meteors
 
-main()
+def main_menu():
+    run = True
+    while run:
+        WIN.blit(BG, (0, 0))
+        title_label = MENU_FONT.render('Press ANY KEY to begin', 1, (255,255,255))
+        WIN.blit(title_label, (WIDTH/2 - title_label.get_width()/2, 300))
+        pygame.display.update()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+            if event.type == pygame.KEYDOWN:
+                main()
+    pygame.quit()
+
+main_menu()
 
