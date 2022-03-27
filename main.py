@@ -62,12 +62,6 @@ class Projectile:
     def collision(self, obj):
         return collide(self, obj)
 
-class Meteor(Projectile):
-    def __init__(self, x, y, img):
-        super().__init__(x, y, img)
-        self.img = img
-        self.mask = pygame.mask.from_surface(self.img)
-
     def get_width(self):
         return self.img.get_width()
 
@@ -229,7 +223,6 @@ def main():
     enemies = []
     meteors = []
     destroy_enemy = []
-    enemy_speed = []
     fire_rate = []
     hp_bonus = []
 
@@ -294,7 +287,7 @@ def main():
                 enemies.append(enemy)
 
         if random.randrange(0, 20*FPS) == 1: # Every second there is a 5% chance of a meteor spawning
-            meteor = Meteor(random.randrange(WIDTH+100, WIDTH+1000+level*50), random.randrange(100, HEIGHT-100), METEOR)
+            meteor = Projectile(random.randrange(WIDTH+100, WIDTH+1000+level*50), random.randrange(100, HEIGHT-100), METEOR)
             meteors.append(meteor)
         
         if random.randrange(0, 25*FPS) == 1: # Every second there is a 4% chance of a booster spawning
@@ -389,11 +382,13 @@ def main_menu():
         WIN.blit(title_label, (WIDTH/2 - title_label.get_width()/2, 300))
         WIN.blit(github_label, (WIDTH - github_label.get_width() - 10, HEIGHT - 30))
         pygame.display.update()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
             if event.type == pygame.KEYDOWN:
                 main()
+
     pygame.quit()
 
 main_menu()
