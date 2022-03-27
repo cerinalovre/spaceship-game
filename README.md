@@ -5,6 +5,6 @@ Dependencies: pygame module
 
 Assets available at https://craftpix.net/ and https://freesound.org/
 
-!(/assets/img/github_gif.gif)
+![](/assets/img/github_gif.gif)
 
 
